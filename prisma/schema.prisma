@@ -1,0 +1,335 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum AdminStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum NotificationType {
+  ADMIN_JOINED
+  SUBMISSION_RECEIVED
+  GENERAL
+}
+
+enum SurveyStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+}
+
+enum FieldType {
+  SHORT_TEXT
+  LONG_TEXT
+  NUMBER
+  EMAIL
+  PHONE
+  URL
+  SINGLE_SELECT
+  RADIO
+  MULTI_SELECT
+  TIME
+  DAY_OF_WEEK
+  IMAGE_UPLOAD
+  SECTION_HEADING
+  DISPLAY_TEXT
+  TERMS_ACKNOWLEDGEMENT
+}
+
+enum DisplayMapping {
+  TITLE
+  PROVIDER_NAME
+  CATEGORY
+  SPECIALTY
+  DESCRIPTION
+  STREET_ADDRESS
+  CITY
+  STATE
+  ZIP_CODE
+  PHONE
+  WEBSITE
+  HOURS_START_DAY
+  HOURS_END_DAY
+  HOURS_START_TIME
+  HOURS_END_TIME
+  TIME_ZONE
+  AGE_RANGE
+  AVERAGE_WAIT
+  IMAGE
+}
+
+enum OptionKind {
+  STANDARD
+  OTHER
+  NA
+}
+
+enum ResponseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AnalyticsEventType {
+  CATEGORY_VIEW
+  CATEGORY_SEARCH
+  CATEGORY_SELECTION
+}
+
+model AdminUser {
+  id                String            @id @default(cuid())
+  name              String
+  email             String            @unique
+  passwordHash      String
+  role              AdminRole         @default(ADMIN)
+  status            AdminStatus       @default(ACTIVE)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
+  invitations       AdminInvitation[]
+  notifications     Notification[]
+  reviewedResponses SurveyResponse[]
+  auditLogs         AuditLog[]
+}
+
+model AdminInvitation {
+  id          String     @id @default(cuid())
+  email       String
+  role        AdminRole  @default(ADMIN)
+  tokenHash   String     @unique
+  expiresAt   DateTime   @db.Timestamptz(3)
+  acceptedAt  DateTime?  @db.Timestamptz(3)
+  invitedById String?
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  invitedBy   AdminUser? @relation(fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([email, expiresAt])
+  @@index([invitedById])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  recipientId String
+  type        NotificationType
+  title       String
+  message     String
+  metadata    Json?
+  readAt      DateTime?        @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  recipient   AdminUser        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt, createdAt])
+}
+
+model Survey {
+  id                 String           @id @default(cuid())
+  title              String
+  introText          String
+  closingMessage     String
+  termsText          String
+  deadlineText       String?
+  contactName        String?
+  contactEmail       String?
+  status             SurveyStatus     @default(DRAFT)
+  publishedVersionId String?          @unique
+  deletedAt          DateTime?        @db.Timestamptz(3)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @db.Timestamptz(3)
+  sections           SurveySection[]
+  fields             SurveyField[]
+  versions           SurveyVersion[]  @relation("SurveyVersions")
+  publishedVersion   SurveyVersion?   @relation("PublishedVersion", fields: [publishedVersionId, id], references: [id, surveyId], onDelete: NoAction, onUpdate: NoAction)
+  responses          SurveyResponse[]
+
+  @@index([status, deletedAt])
+}
+
+model SurveySection {
+  id       String        @id @default(cuid())
+  surveyId String
+  title    String
+  order    Int
+  survey   Survey        @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  fields   SurveyField[]
+
+  @@unique([id, surveyId])
+  @@unique([surveyId, order])
+}
+
+model SurveyField {
+  id              String              @id @default(cuid())
+  surveyId        String
+  sectionId       String
+  fieldKey        String
+  label           String
+  fieldType       FieldType
+  helperText      String?
+  placeholder     String?
+  content         String?
+  required        Boolean             @default(false)
+  order           Int
+  validationRules Json
+  displayMapping  DisplayMapping?
+  allowsOther     Boolean             @default(false)
+  allowsNA        Boolean             @default(false)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+  survey          Survey              @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  section         SurveySection       @relation(fields: [sectionId, surveyId], references: [id, surveyId], onDelete: Cascade)
+  options         SurveyFieldOption[]
+
+  @@unique([surveyId, fieldKey])
+  @@unique([sectionId, order])
+  @@index([surveyId, displayMapping])
+}
+
+model SurveyFieldOption {
+  id      String      @id @default(cuid())
+  fieldId String
+  value   String
+  label   String
+  order   Int
+  kind    OptionKind  @default(STANDARD)
+  field   SurveyField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([fieldId, value])
+  @@unique([fieldId, order])
+}
+
+model SurveyVersion {
+  id            String           @id @default(cuid())
+  surveyId      String
+  versionNumber Int
+  snapshot      Json
+  publishedAt   DateTime         @default(now()) @db.Timestamptz(3)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  survey        Survey           @relation("SurveyVersions", fields: [surveyId], references: [id], onDelete: Restrict)
+  publishedFor  Survey[]         @relation("PublishedVersion")
+  responses     SurveyResponse[]
+
+  @@unique([id, surveyId])
+  @@unique([surveyId, versionNumber])
+}
+
+model SurveyResponse {
+  id               String         @id @default(cuid())
+  surveyId         String
+  surveyVersionId  String
+  answers          Json
+  status           ResponseStatus @default(PENDING)
+  uploadedImageKey String?
+  reviewerId       String?
+  reviewedAt       DateTime?      @db.Timestamptz(3)
+  reviewNote       String?
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime       @updatedAt @db.Timestamptz(3)
+  survey           Survey         @relation(fields: [surveyId], references: [id], onDelete: Restrict)
+  surveyVersion    SurveyVersion  @relation(fields: [surveyVersionId, surveyId], references: [id, surveyId], onDelete: Restrict)
+  reviewer         AdminUser?     @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+  resource         Resource?
+
+  @@unique([id, surveyVersionId])
+  @@index([surveyId, status, createdAt, id])
+  @@index([status, createdAt, id])
+  @@index([surveyVersionId, surveyId])
+  @@index([reviewerId])
+}
+
+model Resource {
+  id               String             @id @default(cuid())
+  sourceResponseId String             @unique
+  surveyVersionId  String
+  name             String
+  providerName     String?
+  description      String
+  streetAddress    String
+  city             String
+  state            String
+  zipCode          String
+  address          String
+  phone            String
+  website          String?
+  officeHours      Json
+  timeZone         String
+  ageRange         String[]
+  averageWait      String?
+  imageKey         String?
+  latitude         Float?
+  longitude        Float?
+  active           Boolean            @default(true)
+  currentAnswers   Json
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime           @updatedAt @db.Timestamptz(3)
+  sourceResponse   SurveyResponse     @relation(fields: [sourceResponseId, surveyVersionId], references: [id, surveyVersionId], onDelete: Restrict)
+  categories       ResourceCategory[]
+  analyticsEvents  AnalyticsEvent[]
+
+  @@unique([sourceResponseId, surveyVersionId])
+  @@index([active, name, id])
+  @@index([active, city, state])
+  @@index([active, address])
+  @@index([surveyVersionId])
+  @@index([latitude, longitude])
+}
+
+model Category {
+  id              String             @id @default(cuid())
+  name            String
+  slug            String             @unique
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @db.Timestamptz(3)
+  resources       ResourceCategory[]
+  analyticsEvents AnalyticsEvent[]
+}
+
+model ResourceCategory {
+  resourceId String
+  categoryId String
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([resourceId, categoryId])
+  @@index([categoryId, resourceId])
+}
+
+model AnalyticsEvent {
+  id                 String             @id @default(cuid())
+  eventType          AnalyticsEventType
+  categoryId         String?
+  resourceId         String?
+  anonymousSessionId String?
+  metadata           Json?
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  category           Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  resource           Resource?          @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+
+  @@index([eventType, createdAt])
+  @@index([categoryId, createdAt])
+  @@index([resourceId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id         String     @id @default(cuid())
+  adminId    String?
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime   @default(now()) @db.Timestamptz(3)
+  admin      AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([action, createdAt])
+}

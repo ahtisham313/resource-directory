@@ -20,6 +20,18 @@ jobs:
     name: Quality
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: resource_directory
+          POSTGRES_USER: resource_user
+          POSTGRES_PASSWORD: ci-only-disposable-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U resource_user -d resource_directory"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - name: Check out source and commit history
         uses: actions/checkout@v7
@@ -38,6 +50,17 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Validate Prisma schema
+        run: npm run db:validate
+
+      - name: Test survey contracts and projection
+        run: npm test
+
+      - name: Test migrations, database constraints and seed repeatability
+        run: npm run test:db
+        env:
+          DATABASE_URL: postgresql://resource_user:ci-only-disposable-password@127.0.0.1:5432/resource_directory
 
       - name: Type-check with generated route types
         run: npm run typecheck
