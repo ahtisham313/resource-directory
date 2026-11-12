@@ -1,0 +1,123 @@
+name: Quality and Railway deployment
+
+on:
+  pull_request:
+    branches: [main, dev, test]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  push:
+    branches: [main, dev, test]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source and commit history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check with generated route types
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Validate Conventional Commits
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            printf '%s\n' "$PR_TITLE" | npm run commitlint -- --strict
+          fi
+          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            commit_range="$HEAD_SHA"
+          else
+            commit_range="$BASE_SHA..$HEAD_SHA"
+          fi
+          # Checking each message includes the root commit on a new branch push.
+          commit_list=$(git rev-list --reverse "$commit_range")
+          while IFS= read -r commit_sha; do
+            [[ -n "$commit_sha" ]] || continue
+            git show -s --format=%B "$commit_sha" | npm run commitlint -- --strict
+          done <<< "$commit_list"
+
+  deploy:
+    name: Deploy to Railway
+    needs: quality
+    if: github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'test')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: ${{ github.ref_name == 'dev' && 'development' || 'test' }}
+      url: ${{ vars.RAILWAY_PUBLIC_URL }}
+    steps:
+      - name: Check out the verified commit
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install pinned Railway CLI
+        run: npm install --global @railway/cli@5.71.0
+
+      - name: Deploy and verify the public URL
+        shell: bash
+        env:
+          CI: "true"
+          RAILWAY_TOKEN: ${{ secrets[github.ref_name == 'dev' && 'RAILWAY_TOKEN_DEV' || 'RAILWAY_TOKEN_TEST'] }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_PUBLIC_URL: ${{ vars.RAILWAY_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          for required_name in RAILWAY_TOKEN RAILWAY_PROJECT_ID RAILWAY_SERVICE_ID RAILWAY_ENVIRONMENT_ID RAILWAY_PUBLIC_URL; do
+            if [[ -z "${!required_name}" ]]; then
+              echo "::error::Missing $required_name in the selected GitHub environment."
+              exit 1
+            fi
+          done
+          if [[ "$RAILWAY_PUBLIC_URL" != https://* ]]; then
+            echo "::error::RAILWAY_PUBLIC_URL must be the actual HTTPS web-service URL."
+            exit 1
+          fi
+          # Attached mode waits for deployment status. --ci streams build logs
+          # only; --detach returns before the release is verified.
+          railway up --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT_ID"
+          curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 --output /dev/null "$RAILWAY_PUBLIC_URL"
