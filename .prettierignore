@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+build/
+coverage/
+package-lock.json
+next-env.d.ts
+AGENTS.md
+.env*
+docs/phase-1-setup.md
+docs/phase-1-review.md

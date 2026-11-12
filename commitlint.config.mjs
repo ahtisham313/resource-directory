@@ -1,0 +1,9 @@
+const commitlintConfig = {
+  extends: ["@commitlint/config-conventional"],
+  rules: {
+    "scope-empty": [2, "never"],
+    "scope-case": [2, "always", "kebab-case"],
+  },
+};
+
+export default commitlintConfig;
