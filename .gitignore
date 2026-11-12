@@ -32,6 +32,14 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# local Railway CLI state
+.railway/
+
+# local setup and verification notes
+/docs/phase-1-setup.md
+/docs/phase-1-review.md
 
 # vercel
 .vercel
