@@ -44,6 +44,12 @@ export function LoginForm() {
         redirect: false,
         callbackUrl: "/admin",
       });
+      if (result?.status === 429) {
+        setMessage(
+          "Too many sign-in attempts. Please wait a minute and try again.",
+        );
+        return;
+      }
       if (!result?.ok || result.error) {
         setMessage("Invalid email or password.");
         return;

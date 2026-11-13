@@ -460,7 +460,7 @@ export function QuestionEditor({
       )}
       {!display && (
         <details className="rounded-lg border p-4">
-          <summary className="min-h-8 cursor-pointer text-sm font-medium">
+          <summary className="min-h-11 cursor-pointer text-sm font-medium">
             Validation settings
           </summary>
           <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2">

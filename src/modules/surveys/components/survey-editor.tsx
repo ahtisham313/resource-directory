@@ -617,7 +617,7 @@ export function SurveyEditor({ initial }: { initial: SurveyEditorData }) {
             ))}
           </section>
           <details className="rounded-xl border bg-background p-4 sm:p-6">
-            <summary className="min-h-8 cursor-pointer text-sm font-semibold">
+            <summary className="min-h-11 cursor-pointer text-sm font-semibold">
               Publication checks ·{" "}
               {publishIssues.length
                 ? `${publishIssues.length} item(s) to complete`

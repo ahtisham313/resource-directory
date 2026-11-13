@@ -91,6 +91,7 @@ async function querySessions(
         body: JSON.stringify({
           query: { kind: "HogQLQuery", query },
           name: "Resource Directory website sessions",
+          refresh: "force_blocking",
         }),
         cache: "no-store",
         redirect: "error",

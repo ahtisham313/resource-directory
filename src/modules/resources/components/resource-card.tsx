@@ -115,7 +115,7 @@ export function ResourceCard({
                 {telephone ? (
                   <a
                     href={`tel:${telephone}`}
-                    className="rounded text-teal-800 underline-offset-4 hover:underline focus-visible:outline-2"
+                    className="inline-flex min-h-11 items-center rounded text-teal-800 underline-offset-4 hover:underline focus-visible:outline-2"
                   >
                     {resource.phone}
                   </a>
@@ -138,7 +138,7 @@ export function ResourceCard({
                     href={resource.website}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="rounded text-teal-800 underline-offset-4 hover:underline focus-visible:outline-2"
+                    className="inline-flex min-h-11 max-w-full items-center rounded break-all text-teal-800 underline-offset-4 hover:underline focus-visible:outline-2"
                   >
                     {new URL(resource.website).hostname}
                     <span className="sr-only"> (opens a new tab)</span>

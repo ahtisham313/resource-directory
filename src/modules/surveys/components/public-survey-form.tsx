@@ -185,7 +185,7 @@ export function PublicSurveyForm({
                 {labels[key] ? (
                   <a
                     href={`#field-${key}`}
-                    className="underline underline-offset-2"
+                    className="inline-flex min-h-11 items-center underline underline-offset-2"
                   >
                     {labels[key]}: {error}
                   </a>

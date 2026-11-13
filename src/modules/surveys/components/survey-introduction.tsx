@@ -23,7 +23,7 @@ export function SurveyIntroduction({ snapshot }: { snapshot: SurveySnapshot }) {
               {" "}
               ·{" "}
               <a
-                className="break-all underline underline-offset-4"
+                className="inline-flex min-h-11 max-w-full items-center break-all underline underline-offset-4"
                 href={`mailto:${snapshot.contactEmail}`}
               >
                 {snapshot.contactEmail}

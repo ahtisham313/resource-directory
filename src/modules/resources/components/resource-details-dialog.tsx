@@ -145,7 +145,7 @@ export function ResourceDetailsDialog({
                             href={field.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-teal-800 underline underline-offset-4 focus-visible:outline-2"
+                            className="inline-flex min-h-11 max-w-full items-center break-all text-teal-800 underline underline-offset-4 focus-visible:outline-2"
                           >
                             {field.text}
                             <span className="sr-only"> (opens a new tab)</span>
