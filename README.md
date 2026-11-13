@@ -1,325 +1,718 @@
 # Resource Directory
 
-A healthcare directory with a public provider survey and an admin portal for reviewing submissions, publishing resources, managing surveys and inviting administrators.
+Resource Directory is a healthcare provider directory built with Next.js 16 and PostgreSQL. Providers submit their information through a public survey. An administrator reviews each submission before it becomes a searchable listing, and can later update or deactivate that listing without changing the original submission.
 
-Built with Next.js 16, React, strict TypeScript, Tailwind, shadcn/ui, NextAuth, PostgreSQL 17 and Prisma 7. Zod validates inputs, Nodemailer sends invitations, PostHog tracks public activity, and Recharts displays category usage.
+The same application includes a survey builder, administrator invitations, an analytics dashboard, and Progressive Web App (PWA) support. The public directory does not require an account; administrative work is restricted to signed-in administrators.
 
-## Local setup
+## Technology Stack
 
-Use Node.js 22.12 or newer within version 22. Run these commands from this folder:
+| Area | Implementation |
+| --- | --- |
+| Application | Next.js 16 App Router, React, TypeScript (strict mode) |
+| Interface | Tailwind CSS and shadcn/ui |
+| Database | PostgreSQL 17, Prisma ORM 7 and Prisma migrations |
+| Authentication | Auth.js / NextAuth credentials, bcrypt password hashes |
+| Input validation | Zod and server-side validation |
+| Email invitations | Nodemailer with SMTP |
+| Analytics | PostHog, PostgreSQL category events, Recharts |
+| Deployment | Railway and GitHub Actions |
+| Local database | Docker Compose |
+
+The project is a single Next.js application, with its features organized into modules. Pages and API routes handle requests; the modules hold validation, queries, and business rules. Zod is used for shared input validation, and Recharts is used for the analytics chart.
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 22.12 or later in the 22.x series and npm
+- Docker Desktop
+- Git
+
+The commands below are written for PowerShell on Windows and should be run from the repository root.
+
+### 1. Install and configure
 
 ```powershell
 npm ci
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
+Copy-Item .env.example .env
 ```
 
-Fill in the environment file below. Keep existing credentials when updating a working checkout. Start Docker Desktop, then run:
+Edit `.env` and set the local PostgreSQL password, `DATABASE_URL`, `AUTH_SECRET`, and the initial administrator credentials.
+
+For the database URL, use the same password as `POSTGRES_PASSWORD`. URL-encode special characters if needed.
+
+The sample environment file lists the variables used by the application. Keep `.env` out of Git.
+
+### 2. Start PostgreSQL and prepare the database
 
 ```powershell
 docker compose up -d postgres
 npm run db:migrate:deploy
 npm run db:seed
+```
+
+The Docker database is exposed on `127.0.0.1:5433`.
+
+The migration command applies the checked-in Prisma migrations. The seed command creates:
+
+- The initial super administrator.
+- The default survey from Appendix A, containing seven sections and 29 items.
+- Healthcare categories.
+- Fictional sample resources.
+
+Seeding is explicit and repeatable. It is not part of the normal application startup or Railway deployment, and it should not overwrite existing administrator passwords or published survey edits.
+
+### 3. Run the application
+
+```powershell
 npm run dev
 ```
 
-PostgreSQL listens on `127.0.0.1:5433`. The seed creates the first super admin, the default seven-section survey with 29 items, categories and fictional sample resources. Repeating it preserves existing passwords and published edits. Seeding is always explicit.
+| Page | Local address |
+| --- | --- |
+| Public directory | http://localhost:3000 |
+| Admin sign-in | http://localhost:3000/admin/login |
+| Default survey | http://localhost:3000/survey/seed-practice-provider-survey |
 
-Open [the directory](http://localhost:3000), [admin sign-in](http://localhost:3000/admin/login), or [the default survey](http://localhost:3000/survey/seed-practice-provider-survey). Sign in with the seed credentials you chose. Never commit `.env` or share passwords publicly.
+Sign in with the email and password set in the `SEED_ADMIN_*` variables. The admin account is created by the seed script, not by a public registration page.
 
-## Environment variables
+## Environment Variables
 
-Copy the placeholders from `.env.example`. Database, authentication and initial-admin settings are needed for local setup. Other settings enable the integrations described below.
+Copy `.env.example` rather than creating variable names from scratch. Values for SMTP, geocoding, image storage, and PostHog depend on the services you choose to configure.
 
-| Group               | Variables                                                                           | Notes                                                                                                              |
-| ------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Local PostgreSQL    | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DATABASE_URL`                 | Use the same password in Compose and the URL; URL-encode it. Railway supplies its own database URL.                |
-| Authentication      | `AUTH_SECRET`, `NEXTAUTH_URL`                                                       | Use a random secret of at least 32 bytes and the canonical application URL; HTTPS on Railway.                      |
-| First administrator | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME`                        | Choose a password of 12–72 UTF-8 bytes. Used only by explicit seeding.                                             |
-| Invitations         | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`  | Required for invitation emails. Port 465 normally uses implicit TLS; port 587 uses STARTTLS.                       |
-| Images              | `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Private S3-compatible storage, required only when uploading images. Railway buckets use virtual-hosted addressing. |
-| Address lookup      | `GEOCODING_ENDPOINT`, `GEOCODING_USER_AGENT`                                        | Optional private/self-hosted Nominatim-compatible endpoint. Manual coordinates work without it.                    |
-| Public analytics    | `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`, `NEXT_PUBLIC_POSTHOG_HOST`                     | Public project token and ingestion host. Rebuild after changing public variables.                                  |
-| Session reporting   | `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID`, `POSTHOG_API_HOST`                | Server-only values. Restrict the personal key to the project with `query:read` access.                             |
+| Group | Variables | Purpose |
+| --- | --- | --- |
+| Database | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DATABASE_URL` | Local Compose database and Prisma connection. Railway uses a separate `DATABASE_URL` for each environment. |
+| Authentication | `AUTH_SECRET`, `NEXTAUTH_URL` | Session secret and application base URL. Use HTTPS for deployed URLs. |
+| Initial admin | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME` | Seed the first super administrator. Not needed for ordinary sign-in after seeding. |
+| Email | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Nodemailer connection and sender settings for admin invitations. |
+| Geocoding | `GEOCODING_ENDPOINT`, `GEOCODING_USER_AGENT` | Optional private Nominatim-compatible lookup; manual coordinates are supported. |
+| Image storage | `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Optional S3-compatible storage configuration. No bucket has been provisioned for this project. |
+| Public PostHog | `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`, `NEXT_PUBLIC_POSTHOG_HOST` | Public browser tracking configuration. |
+| PostHog reporting | `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID`, `POSTHOG_API_HOST` | Private server-side access to session reporting. |
 
-Railway supplies `PORT`. GitHub deployment configuration is listed under Deployment; those values do not belong in the browser or a committed environment file.
+Only variables prefixed with `NEXT_PUBLIC_` are intended for the browser. Do not put database credentials, SMTP passwords, or private PostHog keys in client-side variables.
 
-## Survey, review and resource data
+## Application Features
 
-The public form comes from a published database snapshot. It supports validation, Other/N/A answers, a live word counter and required terms acknowledgement. The server validates everything again. Submissions start as `PENDING`; they do not publish a resource.
+### Public Resource Directory
 
-Under **Survey → Survey Responses**, admins can search, filter, page through and inspect submissions. Approval creates exactly one active resource and records the reviewer, time, note and audit entry in one transaction. Rejection records the decision without creating a resource. Original submission answers remain separate from later resource edits.
+The homepage shows active healthcare resources as cards or a compact list. Each result includes the provider's main details, contact information, hours, and a **Read more** view containing the approved survey answers.
 
-The builder supports creating, editing, duplicating, previewing, publishing, unpublishing and deleting surveys. Drafts stay separate from the public form. Every publication creates an immutable version, and answers use stable field keys so changing a label does not change their meaning. Existing responses and resources keep their saved version. Revision checks reject conflicting saves. Deleting published history archives the survey.
+The detailed view uses the survey version associated with the resource, so fields added through the builder can appear without hardcoding them into the page.
 
-The builder's display mappings control the directory projection:
+Visitors can:
 
-| Survey data / mapping                                                                                                    | Directory display                                                        |
-| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Practice name / `TITLE`, provider name / `PROVIDER_NAME`                                                                 | Title and provider name; provider name is the fallback title.            |
-| Category / `CATEGORY`                                                                                                    | Category badges and filters.                                             |
-| Specialty / `SPECIALTY`, additional information / `DESCRIPTION`                                                          | Card/list description; full answers in Read more.                        |
-| Street, city, state and ZIP mappings                                                                                     | Combined address.                                                        |
-| Phone / `PHONE`, website / `WEBSITE`                                                                                     | Contact links. N/A websites have no link.                                |
-| Start/end day and time, plus `TIME_ZONE`                                                                                 | Office hours and current opening status.                                 |
-| Age range / `AGE_RANGE`, waiting time / `AVERAGE_WAIT`                                                                   | Card/list highlights.                                                    |
-| Image / `IMAGE`                                                                                                          | Uploaded provider image or the default image.                            |
-| Gender, new-patient acceptance/availability, same-day appointments, online scheduling, insurance, languages and services | Full answers under their saved survey headings in Read more.             |
-| Terms text, acknowledgement and any additional fields                                                                    | Preserved and displayed with the saved response definition in Read more. |
+- Search by name, category, or address.
+- Filter by healthcare category.
+- Switch between card and list views.
+- Sort results alphabetically (A–Z or Z–A).
+- Browse resources in a default daily randomized order.
+- Navigate results using server-side pagination, with 10 resources per page.
+- Request browser location permission to see distances.
+- Sort resources by nearest or farthest distance.
 
-Admins can search and filter resources, edit their full saved survey data, activate/deactivate listings and delete them after confirmation. Edits use the resource's original survey version and do not rewrite its source submission. Public list, detail and image requests check active status and use no-store responses.
+Search, filtering, sorting, and pagination are handled on the server.
 
-## Directory, coordinates and images
+Opening status is calculated from the provider's saved office hours and time zone. Inactive resources are excluded from public lists, detail responses, and image access.
 
-Search, category filters, A–Z/Z–A sorting and pagination run in PostgreSQL, with 10 results per page. Card/list view and filters stay in the URL. Daily ordering uses a PostgreSQL hash of the UTC date and resource ID, with an ID tie-breaker, so it stays stable during a UTC day. Adding or deactivating resources can move page boundaries.
+### Public Survey and Submission Review
 
-Approval reuses verified coordinates for the same address, uses the configured private geocoder, or asks for manually checked coordinates. Changed addresses need new coordinates. My Location requests browser permission and sends temporary coordinates in headers. PostgreSQL applies Haversine distance in miles before sorting and pagination. Visitor coordinates are not saved or added to URLs. Resources without coordinates sort last. Opening status uses the provider's time zone and supports overnight hours; ambiguous hours show as unavailable.
+The public survey is available at `/survey/[id]` and is generated from a published definition stored in PostgreSQL.
 
-Images accept one PNG, JPG or WEBP up to 2 MB. The server checks size, MIME type and file signatures. Only private object keys are stored; images are served through endpoints that check admin access or active-resource status. Missing storage uses the default image. Failed saves attempt object cleanup. Resource edits retain old images because the original response may still reference them.
+Question labels, field types, options, required settings, and validation rules are not hardcoded into the page.
 
-## Administrators and invitations
+Supported fields include:
 
-Super admins manage accounts, roles, status and invitations. Self-deletion and removal of the last active super admin are blocked. Disabled/deleted accounts lose access through current database authorization checks. Passwords use bcrypt, and sign-in is credentials-only with CSRF-protected NextAuth sessions. Credential callbacks allow 20 attempts per minute per proxy-address key.
+- Short and long text.
+- Email, phone, and website.
+- Numeric inputs.
+- Dropdowns, radio buttons, and multiple selections.
+- Day and time inputs.
+- Image selection.
+- Terms acknowledgement.
+- Conditional **Other** and **N/A** options.
 
-Invitation emails use Nodemailer and the canonical `NEXTAUTH_URL`. Remote SMTP requires TLS. If `SMTP_FROM` is blank, an email address in `SMTP_USER` is used. Gmail app passwords may include their displayed spaces. A failed send removes the unused invitation so it can be retried.
+The browser provides immediate validation feedback, while the server validates answers again before storing them.
 
-Links expire after 24 hours and can be used once. Only token hashes are stored. Acceptance creates the account, consumes the invitation and notifies existing active admins in one transaction. The bell shows unread notifications; each admin can read and mark only their own notifications. Optional new-admin announcement emails are not implemented.
+A honeypot and request limits provide basic spam protection.
 
-## Analytics
+New submissions are stored with `PENDING` status and are not published automatically.
 
-The dashboard shows current resource, pending-response and administrator totals. Category usage and PostHog sessions use the selected UTC year, month, day or date range. Ranges include both dates and can cover up to 366 days. Current resource/admin totals include active and inactive records.
+The admin's Survey Responses section provides:
 
-Category-filter changes are stored in the existing PostgreSQL `AnalyticsEvent` table as `CATEGORY_SELECTION`, linked to a verified category. UUIDs deduplicate retries. Refreshing, searching, sorting and paging do not add selections. Recharts includes zero-use categories and identifies most/least usage. PostgreSQL keeps the chart available independently of PostHog.
+- Search and status filtering.
+- Server-side pagination.
+- Full response details.
+- Approval or rejection with an optional note.
+- Reviewer and review timestamp tracking.
 
-PostHog records anonymous public page views, sessions and `category_selected`. US ingestion uses `https://us.i.posthog.com`; EU uses `https://eu.i.posthog.com`. The private API host is `https://us.posthog.com` or `https://eu.posthog.com`. The server queries distinct SDK session IDs with public activity in the selected period and caches results for one minute. After that cache expires, it requests a fresh calculation instead of PostHog's older cached result. Missing credentials or provider errors show **Unavailable**.
+Approval creates an active resource and its category relationships. Rejection records the decision without publishing a resource.
 
-Admin/invitation routes, query strings, referrers, answers, contact details and precise coordinates are excluded from analytics. Replay, autocapture and optional tracking features are disabled. Do Not Track, Global Privacy Control and SDK opt-out are respected. Also enable PostHog's Discard IP data setting.
+**Image upload status:** The application validates PNG, JPG, and WEBP files against a 2 MB limit and includes an optional storage adapter. However, S3 storage has not been configured or deployed. Persistent provider image uploads are therefore not available in the current setup. Listings without an uploaded image use the default provider image.
 
-## PWA
+### Dynamic Survey Builder
 
-The manifest, 192px/512px icons, maskable icon and Apple touch icon support browser installation. Use the browser's Install option on supported desktop/Android browsers, or Safari's **Share → Add to Home Screen** on iOS. No app-store build or custom install button is needed.
+Administrators can create, edit, duplicate, preview, publish, unpublish, and archive surveys.
 
-The worker registers in a production build over HTTPS or secure localhost. Test it locally with `npm run build` followed by `npm start`; development mode does not register it. After the first successful visit, failed public navigation shows `/offline`. Try again performs a normal GET navigation back to the directory.
+The editor supports:
 
-Only the offline page, its referenced build assets and app icons are precached. Admin pages, invitations, APIs, resource results, uploads and submissions stay on the network. Nothing is queued for later submission. Cache names are versioned; bump the version in `public/sw.js` when changing the offline shell. Activation removes only old application caches and does not force a reload.
+- Survey title and introduction.
+- Editable deadline and contact information.
+- Editable terms and closing message.
+- Sections and questions.
+- Adding, removing, and reordering questions.
+- Required and optional settings.
+- Selectable options and validation rules.
+- Conditional Other/N/A behavior.
+- Mapping survey fields to resource information.
+- Previewing a survey before publication.
 
-## Checks and limitations
+Drafts are separate from published survey definitions.
 
-`npm run mail:verify` checks SMTP connection, TLS and authentication without sending email. Database integration tests create, migrate and remove a disposable local database; the local user needs `CREATEDB` permission. They refuse remote database targets. `auth:verify` checks existing seed credentials without changing them.
+Publishing a draft creates an immutable `SurveyVersion`. Every submission keeps a reference to the version it used, allowing older answers to remain readable after survey changes.
+
+### Resource Management
+
+Administrators can search and filter approved resources, edit their details, and activate, deactivate, or delete them.
+
+Editing a resource updates:
+
+- `Resource.currentAnswers`
+- Searchable resource fields
+- Category relationships
+- Coordinates when the address changes
+
+The original `SurveyResponse.answers` remains unchanged.
+
+Resource updates are reflected in the public directory, and deactivated resources are removed from public results.
+
+### Administrator Management and Invitations
+
+Authentication uses NextAuth credentials with server-side authorization checks.
+
+Super administrators can:
+
+- View and manage administrator accounts.
+- Update roles and account status.
+- Invite administrators by email.
+- Remove administrators with confirmation.
+
+Self-deletion and removal of the last active super administrator are blocked.
+
+Invitations use Nodemailer with SMTP when configured.
+
+Invitation links expire after 24 hours and are valid for one use. Only token hashes are stored in PostgreSQL.
+
+Accepting an invitation creates the administrator account and notifies existing active administrators through the in-app notification center.
+
+Each administrator can view and mark only their own notifications as read.
+
+Actual invitation email delivery requires a configured SMTP provider.
+
+### Analytics Dashboard
+
+The dashboard displays:
+
+- Total resources.
+- Pending survey responses.
+- Total administrators.
+- Website session statistics when PostHog is configured.
+- Category usage through a Recharts bar chart.
+
+Category-filter interactions are stored in PostgreSQL.
+
+The chart reports category usage, including categories with zero selections.
+
+Analytics can be filtered by:
+
+- Year.
+- Month.
+- Specific date.
+- Date range.
+
+PostHog is used for anonymous public page views, sessions, and `category_selected` events.
+
+Private PostHog API credentials remain server-side. Survey answers and private administrator data are excluded from public analytics tracking.
+
+### Progressive Web App
+
+The application includes:
+
+- Web app manifest.
+- Application icons.
+- Maskable icon.
+- Service worker.
+- Offline fallback page.
+- Browser-based installation support.
+
+Supported browsers can install the application directly using their built-in installation or Add to Home Screen options.
+
+The service worker caches the offline page and selected static resources.
+
+Authenticated pages, administrator data, invitation links, APIs, and survey submissions are not stored for offline reuse.
+
+Offline survey submission and background synchronization are not implemented.
+
+To test the PWA locally using a production build:
 
 ```powershell
-npm test
-npm run test:db
-npm run db:validate
-npm run auth:verify
-npm run mail:verify
-npm run lint
-npm run typecheck
-npm run format:check
 npm run build
+npm start
 ```
 
-Public pages, forms, resource details, admin pages and dialogs were checked at **300, 360, 768, 1024, 1440, 1920 and 3000px**, plus landscape and 200% zoom reflow emulation. Local production Chrome checks cover manifest diagnostics, offline recovery and cache exclusions. Physical Android/iOS installation still needs a device check. Current Lighthouse versions no longer include the old PWA audit category.
+Open `http://localhost:3000`, load the site once while online, and use browser developer tools to verify the offline fallback.
 
-Public submission, approval/rejection, resource editing/visibility, survey versioning, invitations, notifications and category reporting were exercised locally with fictional data in a disposable database. SMTP connection/TLS/authentication passed; invitation delivery was captured locally, not sent through a real mail provider. Real S3 upload/read remains unverified. Live PostHog browser ingestion and the private session-count query passed. Public SDK payload privacy was also checked against local capture.
+## Architecture Decisions and Assumptions
 
-Request limits are bounded and process-local; they reset on restart and are not shared between Railway instances. Automatic geocoding requires the optional private endpoint; manual coordinates remain available. No push notifications, background sync, offline submission, native app tooling or drag-and-drop builder were added.
+The following decisions were made to keep the implementation maintainable while meeting the assessment requirements.
 
-Files/folders use kebab-case, identifiers use camelCase, and JSX components use PascalCase. TypeScript is strict, explicit `any` and `ts-ignore` are forbidden, and commits/PR titles use Conventional Commits. Server services own validation, authorization and database writes; client components handle interactive forms and charts. Directory and reporting queries use database counts, grouping and pagination rather than loading entire tables.
+### 1. Modular Next.js Application
 
-## Deployment and handover
+I kept the public website, admin portal, and backend API in one Next.js application instead of building separate frontend and backend projects.
 
-The existing GitHub Actions workflow checks PRs and pushes to `main`, `dev` and `test`. It runs lint, schema validation, unit/database tests, type checking, build, formatting and Conventional Commit checks. Only successful pushes to `dev`/`test` proceed to Railway deployment.
+This reduced deployment complexity and kept related application logic in one repository.
 
-GitHub environments `development` and `test` need their own `RAILWAY_PROJECT_ID`, `RAILWAY_SERVICE_ID`, `RAILWAY_ENVIRONMENT_ID` and `RAILWAY_PUBLIC_URL` variables. Store the corresponding project tokens as `RAILWAY_TOKEN_DEV` and `RAILWAY_TOKEN_TEST` secrets. Each Railway environment needs an independent PostgreSQL database, authentication settings and integration credentials. Confirm Railway's own GitHub auto-deploy is disabled when this workflow owns deployment.
+The code is organized into feature modules. Route handlers deal with HTTP requests and authorization, while services handle validation, database queries, and business operations.
 
-`railway.json` builds the app, runs `npm run db:migrate:deploy` before starting, and checks `/`. That command runs `prisma migrate deploy`; a migration failure must stop deployment. Seeding is not automatic. Prisma Client is generated during installation, type checking and builds.
+The trade-off is that frontend and backend changes are deployed together, which is reasonable for the current project size.
 
-Development: [Railway app](https://web-development-3187fa5c.up.railway.app). Test: [Railway app](https://web-test-test-7ff28964.up.railway.app). These deployments still contain the older Phase 2 code, as last reported. The current local changes have not been deployed or verified there. After deployment, check both HTTPS apps, separate databases, migrations, login, survey, directory, manifest, service worker and configured integrations. Share reviewer credentials privately.
+### 2. Immutable Survey Versioning
 
-For the 5–10 minute walkthrough, prepare a fictional **Oak Lane Community Practice**, a provider name, a safe example address/phone and an invitation inbox you control. Keep credentials and invite tokens off-screen:
+Survey questions can change after providers have submitted their information.
 
-1. **0:00–1:00:** Show the directory, search, category filter, card/list view and Read more.
-2. **1:00–2:30:** Submit the provider survey and show the pending confirmation.
-3. **2:30–4:00:** Sign in, review and approve it, then find the new resource publicly.
-4. **4:00–5:00:** Edit/deactivate the resource, show its disappearance, and reactivate it.
-5. **5:00–6:00:** Show a draft question, preview and published version history.
-6. **6:00–7:30:** Send/accept an invitation, sign in and show the existing admin's unread notification.
-7. **7:30–9:00:** Show category analytics/date filters, browser installation and the offline fallback.
+If saved responses were displayed using the latest question definitions, older answers could become misleading or unreadable.
 
-The recording, final deployment verification and private reviewer credentials are still manual submission steps.
+I used editable survey drafts and immutable published snapshots to avoid this problem.
 
-## Project structure
+Each `SurveyResponse` references the exact `SurveyVersion` used during submission. Answers are stored using stable field keys rather than labels or question positions.
 
-This tree lists the application files. Dependencies, generated Prisma/Next.js output, local environment files and ignored review notes are omitted.
+This means a question can be renamed or reordered without changing the meaning of previously submitted answers.
+
+Approved resources maintain their own `currentAnswers`, allowing administrators to edit public information without modifying the original submission.
+
+### 3. Survey Field Mapping
+
+The survey builder lets administrators specify which questions provide information for public resource listings.
+
+This avoids depending on hardcoded question numbers or labels.
+
+During approval, the application uses these mappings to populate searchable `Resource` fields.
+
+The main mappings are:
+
+| Survey mapping | Directory use |
+| --- | --- |
+| `TITLE`, `PROVIDER_NAME` | Listing title and provider name, with provider name as a possible fallback. |
+| `CATEGORY`, `SPECIALTY`, `DESCRIPTION` | Category badges, specialty, and card description. |
+| Street, city, state, and ZIP mappings | Address display, searching, and geocoding. |
+| `PHONE`, `WEBSITE` | Contact links. N/A websites do not produce links. |
+| Start/end day and time, `TIME_ZONE` | Office hours and current open/closed status. |
+| `AGE_RANGE`, `AVERAGE_WAIT` | Summary information displayed on cards and lists. |
+| `IMAGE` | Provider image when storage is configured, otherwise the default image. |
+| Other published questions | Complete answers under their original headings in Read more. |
+
+The public directory uses searchable columns for common operations and retains additional answers in `currentAnswers`.
+
+This provides both efficient searching and support for newly added survey fields.
+
+### 4. Deterministic Daily Random Ordering
+
+Using PostgreSQL `ORDER BY random()` would change the ordering on every request.
+
+That creates a pagination problem because visitors could see repeated resources or miss records while moving between pages.
+
+Instead, the directory orders resources using a deterministic hash based on the UTC date and Resource ID.
+
+A stable ID tie-breaker is also used.
+
+This provides a different ordering each day while keeping results consistent during the same day.
+
+The limitation is that adding or deactivating resources during the day can still change page boundaries.
+
+### 5. Geocoding and Distance Calculation
+
+A resource needs coordinates before it can participate in distance-based sorting.
+
+I chose to resolve the submitted address during the approval workflow instead of requesting coordinates every time a visitor searches.
+
+The application can:
+
+- Reuse previously verified coordinates.
+- Use a configured private geocoding endpoint.
+- Accept manually validated coordinates when automatic lookup is unavailable.
+
+This reduces dependency on external geocoding services during normal directory browsing.
+
+When visitors allow location access, PostgreSQL calculates the distance using the Haversine formula.
+
+The formula calculates great-circle distance between two latitude/longitude points.
+
+Distances are calculated in miles and applied before pagination, allowing nearest and farthest sorting across the complete result set.
+
+PostGIS was not introduced because the Haversine calculation is sufficient for the directory's requirements.
+
+Visitor coordinates are used for the current request and are not stored as user records. Resources without coordinates sort last in location-based results.
+
+### 6. PostgreSQL and PostHog for Analytics
+
+I used PostgreSQL for healthcare category usage and PostHog for website sessions and page views.
+
+Category interactions are already associated with known Category records, making them easy to validate and aggregate directly from the existing database.
+
+This also allows the category chart to remain available when PostHog reporting is temporarily unavailable.
+
+PostHog handles website session and page-view tracking, avoiding the need to build a separate session tracking system.
+
+The dashboard distinguishes current database totals from time-filtered usage statistics.
+
+### 7. Image Storage
+
+The intended design uses private object storage for uploaded provider images while keeping only the object key in PostgreSQL.
+
+This avoids storing binary images inside the application database and allows image access to be controlled through server endpoints.
+
+The application contains an S3-compatible storage adapter and file validation logic.
+
+However, **no S3-compatible bucket is configured in the current project**.
+
+Image persistence is therefore not a completed deployment feature. The current application uses the default provider image where no stored image is available.
+
+Persistent image uploads require storage configuration and end-to-end verification.
+
+### 8. Transactions and Data Integrity
+
+Approving a survey submission affects several related records.
+
+These include:
+
+- Survey response status.
+- Reviewer information.
+- New Resource.
+- Category relationships.
+- Audit log.
+
+These updates run inside a Prisma transaction.
+
+Database uniqueness rules and conditional status updates prevent repeated approval requests from creating duplicate Resources.
+
+Invitation acceptance follows the same principle. Account creation, invitation consumption, and join notifications are handled together.
+
+This prevents partial operations from leaving inconsistent data.
+
+### 9. PWA Caching Strategy
+
+I kept offline support limited to the offline page and necessary static assets.
+
+Caching authenticated administrator pages, survey submissions, or private API responses could expose sensitive information or leave outdated data visible after an account logs out.
+
+For that reason, these resources are excluded from service-worker caching.
+
+The trade-off is that live directory browsing and form submission still require an internet connection.
+
+This is intentional; the PWA does not attempt offline synchronization.
+
+## Verification and Development Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm test` | Run unit tests. |
+| `npm run test:db` | Run database integration tests against a disposable local database. |
+| `npm run db:validate` | Validate the Prisma schema. |
+| `npm run auth:verify` | Verify the seeded administrator credentials without changing them. |
+| `npm run mail:verify` | Check SMTP connection, TLS, and authentication without sending an invitation. |
+| `npm run lint` | Run ESLint and naming checks. |
+| `npm run typecheck` | Run strict TypeScript checks. |
+| `npm run format:check` | Check code formatting with Prettier. |
+| `npm run build` | Create a production Next.js build. |
+
+The database integration runner uses a disposable local database and must not be directed at Railway databases containing application data.
+
+Use fictional records when demonstrating survey submissions, approval, and administrator management.
+
+### Responsive Design
+
+The interface is designed to support viewport widths from 300px to 3000px.
+
+The documented verification widths are:
+
+| Width | Target |
+| --- | --- |
+| 300px | Small mobile |
+| 360px | Standard mobile |
+| 768px | Tablet |
+| 1024px | Desktop |
+| 1440px | Large desktop |
+| 1920px | Full HD |
+| 3000px | Ultra-wide display |
+
+The layout also accounts for landscape orientation and 200% browser zoom.
+
+Tables use contained scrolling or compact layouts on narrow screens, and the admin sidebar collapses into a mobile-friendly navigation menu.
+
+## CI/CD and Deployment
+
+The repository uses three branches:
+
+- `main` — Main repository branch.
+- `dev` — Development environment.
+- `test` — Test/staging environment.
+
+GitHub Actions runs automated checks before deployment.
+
+The existing pipeline includes:
+
+- ESLint.
+- TypeScript checking.
+- Production build.
+- Prettier formatting.
+- Prisma schema validation.
+- Unit and database tests.
+- Conventional Commit validation.
+
+Successful pushes to `dev` and `test` are configured to deploy to their corresponding Railway environments.
+
+| Branch | Railway environment | Database |
+| --- | --- | --- |
+| `dev` | Development | Independent PostgreSQL service |
+| `test` | Test / staging | Separate PostgreSQL service |
+
+Each environment uses its own database connection, authentication secret, application URL, and integration configuration.
+
+### GitHub Deployment Configuration
+
+GitHub environment variables:
+
+- `RAILWAY_PROJECT_ID`
+- `RAILWAY_SERVICE_ID`
+- `RAILWAY_ENVIRONMENT_ID`
+- `RAILWAY_PUBLIC_URL`
+
+GitHub secrets:
+
+- `RAILWAY_TOKEN_DEV`
+- `RAILWAY_TOKEN_TEST`
+
+Secret values are stored outside the repository.
+
+Railway applies database migrations before starting the application:
+
+```powershell
+npm run db:migrate:deploy
+```
+
+This runs Prisma's `migrate deploy` command.
+
+A migration failure must stop deployment.
+
+Database seeding is not performed automatically during Railway deployments. Each target database must be seeded explicitly when first configured.
+
+If GitHub Actions manages deployments, Railway's independent GitHub auto-deploy should remain disabled to avoid duplicate deployments.
+
+### Coding Conventions
+
+The project follows these conventions:
+
+- **Files and folders:** kebab-case.
+- **Variables and functions:** camelCase.
+- **React components:** PascalCase.
+- **TypeScript:** strict mode, without `any` or `@ts-ignore`.
+- **Commits:** Conventional Commits.
+
+Example:
+
+```text
+feat(surveys): add survey publishing
+fix(auth): handle expired invitations
+docs(readme): document deployment setup
+```
+
+## Current Integration Limitations
+
+The following external services require configuration for their complete functionality.
+
+**Image storage:** No S3-compatible bucket is configured. Image validation and default images are available, but persistent uploaded-image storage is not.
+
+**SMTP:** Invitation emails require valid SMTP configuration. A successful connection test does not necessarily confirm delivery to an actual recipient.
+
+**Geocoding:** Automatic address lookup requires the configured geocoding endpoint. Administrators can provide manually verified coordinates.
+
+**PostHog:** Public tracking and session reporting require project-specific PostHog credentials. PostgreSQL-backed category analytics can operate independently.
+
+**Offline support:** The PWA provides an offline fallback page. It does not provide an offline directory or queue survey submissions.
+
+## Repository Structure
+
+The following tree describes the application source and configuration based on the available project file inventory. Generated output, dependencies, and local secrets are excluded.
 
 ```text
 resource-directory/
-├── .github/ # GitHub automation
-│   └── workflows/ # Quality checks and Railway deployment
-│       └── ci-cd.yaml
+├── .github/ # Continuous integration and deployments
+│   └── workflows/ # CI checks and Railway deployment
+│       └── ci-cd.yaml # Quality checks and Railway deployment workflow
 ├── prisma/ # Database schema, migrations and seed data
 │   ├── migrations/ # Versioned database changes
-│   │   ├── 20261112000100_initial/ # Migration SQL
-│   │   │   └── migration.sql # Database migration
-│   │   ├── 20261112000200_integrity_guards/ # Migration SQL
-│   │   │   └── migration.sql # Database migration
-│   │   └── migration_lock.toml
+│   │   ├── 20261112000100_initial/
+│   │   │   └── migration.sql # Initial database tables
+│   │   ├── 20261112000200_integrity_guards/
+│   │   │   └── migration.sql # Database integrity constraints
+│   │   └── migration_lock.toml # Prisma migration provider lock
 │   ├── seed-data/ # Default survey and fictional providers
-│   │   ├── default-survey.ts
-│   │   └── sample-resources.ts
-│   ├── schema.prisma # Models, relationships, indexes and enums
-│   ├── seed-database.ts # Repeatable initial-data creation
-│   └── seed.ts # Explicit seed entry point
-├── public/ # Public static files
-│   ├── icons/ # PWA icons and editable SVG source
-│   │   ├── apple-touch-icon.png # Static image asset
-│   │   ├── icon-192.png # Static image asset
-│   │   ├── icon-512.png # Static image asset
-│   │   ├── icon-maskable-512.png # Static image asset
-│   │   └── icon.svg # Static image asset
-│   ├── file.svg # Static image asset
-│   ├── globe.svg # Static image asset
-│   ├── next.svg # Static image asset
+│   │   ├── default-survey.ts # Appendix A survey questions and options
+│   │   └── sample-resources.ts # Fictional resource records
+│   ├── schema.prisma # Database models and relationships
+│   ├── seed-database.ts # Repeatable seed implementation
+│   └── seed.ts # Seed entry point
+├── public/ # Static assets
+│   ├── icons/ # PWA icons
+│   │   ├── apple-touch-icon.png # iOS home screen icon
+│   │   ├── icon-192.png # 192px install icon
+│   │   ├── icon-512.png # 512px install icon
+│   │   ├── icon-maskable-512.png # Maskable install icon
+│   │   └── icon.svg # Editable icon source
+│   ├── file.svg
+│   ├── globe.svg
+│   ├── next.svg
 │   ├── provider-default.svg # Default provider image
-│   ├── sw.js # Versioned offline shell cache and network-first public navigation
-│   ├── vercel.svg # Static image asset
-│   └── window.svg # Static image asset
-├── scripts/ # Database, sign-in and SMTP verification
-│   ├── run-database-tests.ts
-│   ├── verify-admin-login.ts
-│   ├── verify-database.ts
-│   ├── verify-invitation-smtp.ts
-│   └── verify-seed-data.ts
-├── src/ # Application source
-│   ├── app/ # Next.js pages, layouts and HTTP endpoints
+│   ├── sw.js # Offline service worker
+│   ├── vercel.svg
+│   └── window.svg
+├── scripts/ # Local verification utilities
+│   ├── run-database-tests.ts # Database test runner
+│   ├── verify-admin-login.ts # Seeded admin credentials check
+│   ├── verify-database.ts # Database connectivity check
+│   ├── verify-invitation-smtp.ts # SMTP verification
+│   └── verify-seed-data.ts # Seed integrity verification
+├── src/
+│   ├── app/ # Next.js pages and API routes
 │   │   ├── admin/ # Administrator portal
-│   │   │   ├── (protected)/ # Pages that require an active administrator
-│   │   │   │   ├── admins/ # admins routes
-│   │   │   │   │   ├── error.tsx # Recoverable error boundary
-│   │   │   │   │   ├── loading.tsx # Loading feedback
-│   │   │   │   │   └── page.tsx # Page UI
-│   │   │   │   ├── resources/ # resources routes
-│   │   │   │   │   ├── [id]/ # Dynamic URL parameter
-│   │   │   │   │   │   └── edit/ # edit routes
-│   │   │   │   │   │       └── page.tsx # Page UI
-│   │   │   │   │   ├── error.tsx # Recoverable error boundary
-│   │   │   │   │   ├── loading.tsx # Loading feedback
-│   │   │   │   │   └── page.tsx # Page UI
-│   │   │   │   ├── responses/ # responses routes
-│   │   │   │   │   ├── [id]/ # Dynamic URL parameter
-│   │   │   │   │   │   ├── not-found.tsx # Missing-record page
-│   │   │   │   │   │   └── page.tsx # Page UI
-│   │   │   │   │   ├── error.tsx # Recoverable error boundary
-│   │   │   │   │   ├── loading.tsx # Loading feedback
-│   │   │   │   │   └── page.tsx # Page UI
-│   │   │   │   ├── surveys/ # surveys routes
-│   │   │   │   │   ├── [id]/ # Dynamic URL parameter
-│   │   │   │   │   │   ├── edit/ # edit routes
-│   │   │   │   │   │   │   └── page.tsx # Page UI
-│   │   │   │   │   │   └── preview/ # preview routes
-│   │   │   │   │   │       └── page.tsx # Page UI
-│   │   │   │   │   ├── error.tsx # Recoverable error boundary
-│   │   │   │   │   └── page.tsx # Page UI
-│   │   │   │   ├── error.tsx # Recoverable error boundary
-│   │   │   │   ├── layout.tsx # Shared page layout
-│   │   │   │   ├── loading.tsx # Loading feedback
-│   │   │   │   └── page.tsx # Page UI
-│   │   │   ├── login/ # login routes
-│   │   │   │   └── page.tsx # Page UI
-│   │   │   └── layout.tsx # Shared page layout
-│   │   ├── api/ # Server endpoints
-│   │   │   ├── admin/ # Protected administrative endpoints
-│   │   │   │   ├── admins/ # admins routes
-│   │   │   │   │   └── [id]/ # Dynamic URL parameter
-│   │   │   │   │       └── route.ts # HTTP handlers
-│   │   │   │   ├── analytics/ # analytics routes
-│   │   │   │   │   └── route.ts # HTTP handlers
-│   │   │   │   ├── invitations/ # invitations routes
-│   │   │   │   │   ├── [id]/ # Dynamic URL parameter
-│   │   │   │   │   │   └── route.ts # HTTP handlers
-│   │   │   │   │   └── route.ts # HTTP handlers
-│   │   │   │   ├── me/ # me routes
-│   │   │   │   │   └── route.ts # HTTP handlers
-│   │   │   │   ├── notifications/ # notifications routes
-│   │   │   │   │   ├── [id]/ # Dynamic URL parameter
-│   │   │   │   │   │   └── route.ts # HTTP handlers
-│   │   │   │   │   └── route.ts # HTTP handlers
-│   │   │   │   ├── resources/ # resources routes
-│   │   │   │   │   └── [id]/ # Dynamic URL parameter
-│   │   │   │   │       ├── image/ # image routes
-│   │   │   │   │       │   └── route.ts # HTTP handlers
-│   │   │   │   │       └── route.ts # HTTP handlers
-│   │   │   │   ├── responses/ # responses routes
-│   │   │   │   │   └── [id]/ # Dynamic URL parameter
-│   │   │   │   │       ├── approve/ # approve routes
-│   │   │   │   │       │   └── route.ts # HTTP handlers
-│   │   │   │   │       ├── image/ # image routes
-│   │   │   │   │       │   └── route.ts # HTTP handlers
-│   │   │   │   │       └── reject/ # reject routes
-│   │   │   │   │           └── route.ts # HTTP handlers
-│   │   │   │   └── surveys/ # surveys routes
-│   │   │   │       ├── [id]/ # Dynamic URL parameter
-│   │   │   │       │   ├── duplicate/ # duplicate routes
-│   │   │   │       │   │   └── route.ts # HTTP handlers
-│   │   │   │       │   ├── publish/ # publish routes
-│   │   │   │       │   │   └── route.ts # HTTP handlers
-│   │   │   │       │   ├── unpublish/ # unpublish routes
-│   │   │   │       │   │   └── route.ts # HTTP handlers
-│   │   │   │       │   └── route.ts # HTTP handlers
-│   │   │   │       └── route.ts # HTTP handlers
-│   │   │   ├── analytics/ # Public category-event ingestion
-│   │   │   │   └── category/ # category routes
-│   │   │   │       └── route.ts # HTTP handlers
-│   │   │   ├── auth/ # NextAuth endpoints
-│   │   │   │   └── [...nextauth]/ # Dynamic URL parameter
-│   │   │   │       └── route.ts # HTTP handlers
-│   │   │   ├── invitations/ # Invitation acceptance
-│   │   │   │   └── [token]/ # Dynamic URL parameter
-│   │   │   │       └── route.ts # HTTP handlers
-│   │   │   ├── resources/ # Active public resources
-│   │   │   │   ├── [id]/ # Dynamic URL parameter
-│   │   │   │   │   ├── image/ # image routes
-│   │   │   │   │   │   └── route.ts # HTTP handlers
-│   │   │   │   │   └── route.ts # HTTP handlers
-│   │   │   │   └── route.ts # HTTP handlers
-│   │   │   └── surveys/ # Public survey submissions
-│   │   │       └── [id]/ # Dynamic URL parameter
-│   │   │           └── responses/ # responses routes
-│   │   │               └── route.ts # HTTP handlers
-│   │   ├── invite/ # Public invitation pages
-│   │   │   └── [token]/ # Dynamic URL parameter
-│   │   │       └── page.tsx # Page UI
-│   │   ├── offline/ # Offline fallback page
-│   │   │   └── page.tsx # Page UI
-│   │   ├── survey/ # Published public surveys
-│   │   │   └── [id]/ # Dynamic URL parameter
-│   │   │       ├── not-found.tsx # Missing-record page
-│   │   │       └── page.tsx # Page UI
-│   │   ├── error.tsx # Recoverable error boundary
-│   │   ├── favicon.ico # Resource Directory browser icon
-│   │   ├── globals.css # Tailwind setup and theme
-│   │   ├── layout.tsx # Shared metadata, fonts, analytics and worker registration
-│   │   ├── manifest.ts # Installable web app manifest
-│   │   └── page.tsx # Public directory homepage
-│   ├── components/ # Shared UI
-│   │   ├── admin/ # Portal navigation and sign-in
+│   │   │   ├── (protected)/ # Authenticated admin routes
+│   │   │   │   ├── admins/
+│   │   │   │   │   ├── error.tsx
+│   │   │   │   │   ├── loading.tsx
+│   │   │   │   │   └── page.tsx # Administrator management
+│   │   │   │   ├── resources/
+│   │   │   │   │   ├── [id]/
+│   │   │   │   │   │   └── edit/
+│   │   │   │   │   │       └── page.tsx # Resource editing
+│   │   │   │   │   ├── error.tsx
+│   │   │   │   │   ├── loading.tsx
+│   │   │   │   │   └── page.tsx # Resource management
+│   │   │   │   ├── responses/
+│   │   │   │   │   ├── [id]/
+│   │   │   │   │   │   ├── not-found.tsx
+│   │   │   │   │   │   └── page.tsx # Response details
+│   │   │   │   │   ├── error.tsx
+│   │   │   │   │   ├── loading.tsx
+│   │   │   │   │   └── page.tsx # Response listing
+│   │   │   │   ├── surveys/
+│   │   │   │   │   ├── [id]/
+│   │   │   │   │   │   ├── edit/
+│   │   │   │   │   │   │   └── page.tsx # Survey editor
+│   │   │   │   │   │   └── preview/
+│   │   │   │   │   │       └── page.tsx # Survey preview
+│   │   │   │   │   ├── error.tsx
+│   │   │   │   │   └── page.tsx # Survey management
+│   │   │   │   ├── error.tsx
+│   │   │   │   ├── layout.tsx
+│   │   │   │   ├── loading.tsx
+│   │   │   │   └── page.tsx # Analytics dashboard
+│   │   │   ├── login/
+│   │   │   │   └── page.tsx # Admin login
+│   │   │   └── layout.tsx
+│   │   ├── api/ # Backend route handlers
+│   │   │   ├── admin/ # Protected admin APIs
+│   │   │   │   ├── admins/
+│   │   │   │   │   └── [id]/
+│   │   │   │   │       └── route.ts # Admin updates/deletion
+│   │   │   │   ├── analytics/
+│   │   │   │   │   └── route.ts # Dashboard analytics
+│   │   │   │   ├── invitations/
+│   │   │   │   │   ├── [id]/
+│   │   │   │   │   │   └── route.ts # Invitation management
+│   │   │   │   │   └── route.ts # Create invitations
+│   │   │   │   ├── me/
+│   │   │   │   │   └── route.ts # Current admin
+│   │   │   │   ├── notifications/
+│   │   │   │   │   ├── [id]/
+│   │   │   │   │   │   └── route.ts # Mark as read
+│   │   │   │   │   └── route.ts # List notifications
+│   │   │   │   ├── resources/
+│   │   │   │   │   └── [id]/
+│   │   │   │   │       ├── image/
+│   │   │   │   │       │   └── route.ts # Private image access
+│   │   │   │   │       └── route.ts # Resource updates
+│   │   │   │   ├── responses/
+│   │   │   │   │   └── [id]/
+│   │   │   │   │       ├── approve/
+│   │   │   │   │       │   └── route.ts # Resource approval
+│   │   │   │   │       ├── image/
+│   │   │   │   │       │   └── route.ts # Response image
+│   │   │   │   │       └── reject/
+│   │   │   │   │           └── route.ts # Response rejection
+│   │   │   │   └── surveys/
+│   │   │   │       ├── [id]/
+│   │   │   │       │   ├── duplicate/
+│   │   │   │       │   │   └── route.ts
+│   │   │   │       │   ├── publish/
+│   │   │   │       │   │   └── route.ts
+│   │   │   │       │   ├── unpublish/
+│   │   │   │       │   │   └── route.ts
+│   │   │   │       │   └── route.ts
+│   │   │   │       └── route.ts # Survey management APIs
+│   │   │   ├── analytics/
+│   │   │   │   └── category/
+│   │   │   │       └── route.ts # Category event tracking
+│   │   │   ├── auth/
+│   │   │   │   └── [...nextauth]/
+│   │   │   │       └── route.ts # NextAuth handlers
+│   │   │   ├── invitations/
+│   │   │   │   └── [token]/
+│   │   │   │       └── route.ts # Invitation acceptance
+│   │   │   ├── resources/
+│   │   │   │   ├── [id]/
+│   │   │   │   │   ├── image/
+│   │   │   │   │   │   └── route.ts # Public approved images
+│   │   │   │   │   └── route.ts # Resource details
+│   │   │   │   └── route.ts # Public search and pagination
+│   │   │   └── surveys/
+│   │   │       └── [id]/
+│   │   │           └── responses/
+│   │   │               └── route.ts # Public survey submissions
+│   │   ├── invite/
+│   │   │   └── [token]/
+│   │   │       └── page.tsx # Invitation acceptance
+│   │   ├── offline/
+│   │   │   └── page.tsx # Offline fallback
+│   │   ├── survey/
+│   │   │   └── [id]/
+│   │   │       ├── not-found.tsx
+│   │   │       └── page.tsx # Public survey
+│   │   ├── error.tsx
+│   │   ├── favicon.ico
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   ├── manifest.ts # PWA manifest
+│   │   └── page.tsx # Public homepage
+│   ├── components/ # Shared components
+│   │   ├── admin/
 │   │   │   ├── admin-brand.tsx
 │   │   │   ├── admin-shell.tsx
 │   │   │   ├── login-form.tsx
 │   │   │   ├── logout-button.tsx
 │   │   │   └── section-placeholder.tsx
-│   │   ├── shared/ # Service-worker registration
+│   │   ├── shared/
 │   │   │   └── service-worker-registration.tsx
-│   │   └── ui/ # shadcn/ui primitives
+│   │   └── ui/
 │   │       └── button.tsx
-│   ├── lib/ # Database, image-storage and shared helpers
+│   ├── lib/ # Shared server utilities
 │   │   ├── database-client.ts
 │   │   ├── db.ts
-│   │   ├── image-storage.ts
+│   │   ├── image-storage.ts # Optional storage adapter
 │   │   └── utils.ts
-│   ├── modules/ # Feature services and components
-│   │   ├── analytics/ # Public tracking and dashboard reporting
-│   │   │   ├── components/ # Feature UI components
+│   ├── modules/ # Feature modules
+│   │   ├── analytics/
+│   │   │   ├── components/
 │   │   │   │   ├── analytics-dashboard.tsx
 │   │   │   │   ├── analytics-filters.tsx
 │   │   │   │   ├── category-usage-chart.tsx
@@ -330,7 +723,7 @@ resource-directory/
 │   │   │   ├── posthog-config.ts
 │   │   │   ├── posthog-sessions.ts
 │   │   │   └── public-tracking.ts
-│   │   ├── auth/ # Credentials, sessions, roles and request limits
+│   │   ├── auth/
 │   │   │   ├── admin-api.ts
 │   │   │   ├── auth-types.ts
 │   │   │   ├── authorization.ts
@@ -338,8 +731,8 @@ resource-directory/
 │   │   │   ├── login-limiter.ts
 │   │   │   ├── page-access.ts
 │   │   │   └── session-data.ts
-│   │   ├── management/ # Administrators, invitations and notifications
-│   │   │   ├── components/ # Feature UI components
+│   │   ├── management/
+│   │   │   ├── components/
 │   │   │   │   ├── accept-invitation-form.tsx
 │   │   │   │   ├── admin-manager.tsx
 │   │   │   │   └── notification-center.tsx
@@ -351,8 +744,8 @@ resource-directory/
 │   │   │   ├── management-lock.ts
 │   │   │   ├── management-types.ts
 │   │   │   └── notifications.ts
-│   │   ├── resources/ # Public directory and resource editing
-│   │   │   ├── components/ # Feature UI components
+│   │   ├── resources/
+│   │   │   ├── components/
 │   │   │   │   ├── directory-client.tsx
 │   │   │   │   ├── resource-card.tsx
 │   │   │   │   ├── resource-details-dialog.tsx
@@ -366,8 +759,8 @@ resource-directory/
 │   │   │   ├── project-resource.ts
 │   │   │   ├── resource-details.ts
 │   │   │   └── resource-management.ts
-│   │   ├── responses/ # Submission review and approval
-│   │   │   ├── components/ # Feature UI components
+│   │   ├── responses/
+│   │   │   ├── components/
 │   │   │   │   ├── response-answers.tsx
 │   │   │   │   ├── response-image.tsx
 │   │   │   │   ├── response-list.tsx
@@ -379,8 +772,8 @@ resource-directory/
 │   │   │   ├── review-api.ts
 │   │   │   ├── review-mutations.ts
 │   │   │   └── review-types.ts
-│   │   └── surveys/ # Survey definitions, validation, publishing and forms
-│   │       ├── components/ # Feature UI components
+│   │   └── surveys/
+│   │       ├── components/
 │   │       │   ├── builder-client-api.ts
 │   │       │   ├── builder-confirm.tsx
 │   │       │   ├── public-survey-form.tsx
@@ -408,12 +801,12 @@ resource-directory/
 │   │       ├── survey-error.ts
 │   │       ├── survey-snapshot.ts
 │   │       └── validate-image.ts
-│   ├── types/ # Shared TypeScript declarations
+│   ├── types/
 │   │   └── next-auth.d.ts
-│   ├── auth.ts # NextAuth credentials and session configuration
-│   └── instrumentation-client.ts # Guarded public PostHog initialization
-├── tests/ # Unit tests and disposable-database integration tests
-│   ├── fixtures/ # Fictional image fixtures
+│   ├── auth.ts # NextAuth configuration
+│   └── instrumentation-client.ts # PostHog initialization
+├── tests/ # Existing test suites
+│   ├── fixtures/
 │   │   └── survey-images.ts
 │   ├── analytics.integration.test.ts
 │   ├── analytics.test.ts
@@ -437,25 +830,25 @@ resource-directory/
 │   ├── survey-submission.integration.test.ts
 │   ├── survey-submission.test.ts
 │   └── survey-validation.test.ts
-├── .env.example # Environment variable placeholders
-├── .gitattributes # Consistent line endings
-├── .gitignore # Local and generated files to exclude
-├── .nvmrc # Required Node.js major version
-├── .prettierignore # Formatting exclusions
-├── .prettierrc.json # Formatting rules
-├── .railwayignore # Files excluded from Railway uploads
-├── AGENTS.md # Installed Next.js development guidance
-├── commitlint.config.mjs # Conventional Commit rules
-├── components.json # shadcn/ui configuration
-├── compose.yaml # Local PostgreSQL service
-├── eslint.config.mjs # Lint, naming and forbidden-any rules
-├── next.config.ts # Next.js settings and security headers
-├── package-lock.json # Locked dependency versions
-├── package.json # Dependencies and project commands
-├── prisma.config.ts # Prisma paths and explicit seed command
-├── railway.json # Build, migration, startup and health check commands
-├── README.md # Setup, architecture and handover
-├── tsconfig.json # Strict TypeScript configuration
-├── vitest.config.mts # Unit-test configuration
-└── vitest.database.config.mts # Database-test configuration
+├── .env.example # Environment variable examples
+├── .gitattributes
+├── .gitignore
+├── .nvmrc
+├── .prettierignore
+├── .prettierrc.json
+├── .railwayignore
+├── AGENTS.md
+├── commitlint.config.mjs
+├── components.json
+├── compose.yaml
+├── eslint.config.mjs
+├── next.config.ts
+├── package-lock.json
+├── package.json
+├── prisma.config.ts
+├── railway.json
+├── README.md
+├── tsconfig.json
+├── vitest.config.mts
+└── vitest.database.config.mts
 ```
