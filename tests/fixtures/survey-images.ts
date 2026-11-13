@@ -1,0 +1,14 @@
+const images = {
+  png: "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEklEQVQImWPYcuLOlhN3GCAUAEEOCWEmwHNcAAAAAElFTkSuQmCC",
+  jpg: "/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AK2AeC//2Q==",
+  webp: "UklGRjAAAABXRUJQVlA4ICQAAABQAQCdASoCAAIAAUAmJQBOgCgAAP72gRcjsIbsOXXFzZDeAAA=",
+};
+
+export function surveyImage(
+  format: keyof typeof images = "png",
+  name = `provider.${format}`,
+): File {
+  return new File([Buffer.from(images[format], "base64")], name, {
+    type: format === "jpg" ? "image/jpeg" : `image/${format}`,
+  });
+}
