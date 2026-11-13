@@ -4,6 +4,20 @@ Resource Directory is a healthcare provider directory built with Next.js 16 and 
 
 The same application includes a survey builder, administrator invitations, an analytics dashboard, and Progressive Web App (PWA) support. The public directory does not require an account; administrative work is restricted to signed-in administrators.
 
+### Live Deployments
+
+The application is deployed on Railway with separate development
+and test environments, each using its own PostgreSQL database.
+
+| Environment | Branch | Application URL |
+|-------------|--------|-----------------|
+| Development | `dev` | [Development App](https://web-development-3187fa5c.up.railway.app) |
+| Test / Staging | `test` | [Test App](https://web-test-test-7ff28964.up.railway.app) |
+
+GitHub Actions handles deployment to the corresponding Railway
+environment after the required checks pass. Prisma migrations
+are applied during deployment using `prisma migrate deploy`.
+
 ## Technology Stack
 
 | Area | Implementation |
