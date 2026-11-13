@@ -20,10 +20,12 @@ export function PublicSurveyForm({
   snapshot,
   versionId,
   uploadsAvailable,
+  preview = false,
 }: {
   snapshot: SurveySnapshot;
   versionId: string;
   uploadsAvailable: boolean;
+  preview?: boolean;
 }) {
   const [answers, setAnswers] = useState<SurveyAnswers>({});
   const [file, setFile] = useState<File>();
@@ -58,11 +60,18 @@ export function PublicSurveyForm({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy.current) return;
+    if (preview) setMessage("");
     const nextErrors = fieldErrors();
     if (imageKey && errors[imageKey]) nextErrors[imageKey] = errors[imageKey];
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
       focusError(nextErrors);
+      return;
+    }
+    if (preview) {
+      setMessage(
+        "Preview answers are valid. No response or image was sent to the server.",
+      );
       return;
     }
     busy.current = true;
@@ -195,6 +204,7 @@ export function PublicSurveyForm({
         disabled={pending}
         uploadsAvailable={uploadsAvailable}
         onChange={(key, answer) => {
+          if (preview) setMessage("");
           setAnswers((previous) => ({ ...previous, [key]: answer }));
           setErrors((previous) => {
             const next = { ...previous };
@@ -203,6 +213,7 @@ export function PublicSurveyForm({
           });
         }}
         onFileChange={(selected, error) => {
+          if (preview) setMessage("");
           setFile(selected);
           if (imageKey)
             setErrors((previous) => {
@@ -215,8 +226,12 @@ export function PublicSurveyForm({
       />
       {message && (
         <div
-          role="alert"
-          className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm leading-6"
+          role={preview ? "status" : "alert"}
+          className={
+            preview
+              ? "rounded-xl border bg-background p-4 text-sm leading-6"
+              : "rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm leading-6"
+          }
         >
           {message}
           {outdated && (
@@ -242,10 +257,16 @@ export function PublicSurveyForm({
           ) : (
             <Send aria-hidden="true" />
           )}
-          {pending ? "Submitting…" : "Submit information"}
+          {pending
+            ? "Submitting…"
+            : preview
+              ? "Check preview answers"
+              : "Submit information"}
         </Button>
         <p className="mt-3 text-xs leading-6 text-muted-foreground">
-          Submissions are reviewed before they appear in the directory.
+          {preview
+            ? "Preview only. Submitting and uploading are disabled."
+            : "Submissions are reviewed before they appear in the directory."}
         </p>
       </div>
     </form>

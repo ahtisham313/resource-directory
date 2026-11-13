@@ -1,22 +1,16 @@
+import { Suspense } from "react";
 import { requireAdminPage } from "@/modules/auth/page-access";
-import Link from "next/link";
-
-export const metadata = { title: "Survey" };
-
-export default async function SurveysPage() {
+import { listManagedSurveys } from "@/modules/surveys/builder-service";
+import { SurveyManager } from "@/modules/surveys/components/survey-manager";
+export const metadata = { title: "Surveys" };
+async function Management() {
   await requireAdminPage();
+  return <SurveyManager surveys={await listManagedSurveys()} />;
+}
+export default function SurveysPage() {
   return (
-    <section className="max-w-3xl rounded-2xl border bg-background p-5 sm:p-8">
-      <h1 className="text-2xl font-semibold">Survey</h1>
-      <p className="mt-3 text-sm leading-7 text-muted-foreground">
-        Review submitted practice and provider information.
-      </p>
-      <Link
-        href="/admin/responses"
-        className="mt-5 inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-2 focus-visible:outline-ring"
-      >
-        Survey Responses
-      </Link>
-    </section>
+    <Suspense fallback={<p role="status">Loading surveys?</p>}>
+      <Management />
+    </Suspense>
   );
 }

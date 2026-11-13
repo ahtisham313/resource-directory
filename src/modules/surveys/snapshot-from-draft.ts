@@ -1,7 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { surveySnapshotSchema } from "./survey-snapshot";
 
-export async function snapshotFromDraft(
+export async function readDraftDefinition(
   db: Prisma.TransactionClient,
   surveyId: string,
 ) {
@@ -56,9 +56,16 @@ export async function snapshotFromDraft(
   });
   const { id, ...definition } = survey;
   // Copy the definition, not live draft relations, into each published version.
-  return surveySnapshotSchema.parse({
+  return {
     schemaVersion: 1,
     surveyId: id,
     ...definition,
-  });
+  };
+}
+
+export async function snapshotFromDraft(
+  db: Prisma.TransactionClient,
+  surveyId: string,
+) {
+  return surveySnapshotSchema.parse(await readDraftDefinition(db, surveyId));
 }
