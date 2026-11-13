@@ -1,4 +1,5 @@
 import "server-only";
+import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { requireAdmin } from "@/modules/auth/authorization";
@@ -31,6 +32,32 @@ export const responseSelect = {
     select: { id: true, active: true, latitude: true, longitude: true },
   },
 } satisfies Prisma.SurveyResponseSelect;
+
+async function preserveReviewerNames<
+  T extends { id: string; reviewer: { name: string; email: string } | null },
+>(rows: T[], db: Prisma.TransactionClient) {
+  const missing = rows.filter((row) => !row.reviewer).map((row) => row.id);
+  if (!missing.length) return rows;
+  const logs = await db.auditLog.findMany({
+    where: {
+      action: "REVIEWER_REMOVED",
+      entityType: "SurveyResponse",
+      entityId: { in: missing },
+    },
+    select: { entityId: true, metadata: true },
+  });
+  const identities = new Map<string, { name: string; email: string }>();
+  for (const log of logs) {
+    const parsed = z
+      .object({ reviewer: z.object({ name: z.string(), email: z.string() }) })
+      .safeParse(log.metadata);
+    if (parsed.success) identities.set(log.entityId, parsed.data.reviewer);
+  }
+  return rows.map((row) => ({
+    ...row,
+    reviewer: row.reviewer ?? identities.get(row.id) ?? null,
+  }));
+}
 
 function responseIdentity(
   row: Prisma.SurveyResponseGetPayload<{ select: typeof responseSelect }>,
@@ -89,7 +116,8 @@ export async function listResponses(input: unknown) {
         where: { id: { in: ids.map((row) => row.id) } },
         select: responseSelect,
       });
-      const byId = new Map(rows.map((row) => [row.id, row]));
+      const attributed = await preserveReviewerNames(rows, tx);
+      const byId = new Map(attributed.map((row) => [row.id, row]));
       return {
         filters: { ...filters, page },
         total,
@@ -130,7 +158,8 @@ export async function getResponseDetails(id: string) {
       row.surveyId,
     );
     const answers = surveyAnswersSchema.parse(row.answers);
-    return { ...row, snapshot, answers, ...responseIdentity(row) };
+    const [attributed] = await preserveReviewerNames([row], getDb());
+    return { ...attributed, snapshot, answers, ...responseIdentity(row) };
   } catch {
     throw new ReviewError(
       422,

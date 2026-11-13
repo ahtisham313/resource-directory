@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AdminBrand } from "./admin-brand";
 import { LogoutButton } from "./logout-button";
+import { NotificationCenter } from "@/modules/management/components/notification-center";
 import { cn } from "@/lib/utils";
 import type { SafeAdmin } from "@/modules/auth/auth-types";
 
@@ -156,6 +157,7 @@ export function AdminShell({
                 {admin.email}
               </p>
             </div>
+            <NotificationCenter />
             <LogoutButton />
           </div>
         </header>
