@@ -32,7 +32,10 @@ function AdminNavigation({ onNavigate }: { onNavigate?: () => void }) {
         const active =
           href === "/admin"
             ? pathname === href
-            : pathname === href || pathname.startsWith(`${href}/`);
+            : pathname === href ||
+              pathname.startsWith(`${href}/`) ||
+              (href === "/admin/surveys" &&
+                pathname.startsWith("/admin/responses"));
         return (
           <Link
             key={href}

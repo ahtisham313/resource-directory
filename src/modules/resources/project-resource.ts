@@ -6,7 +6,7 @@ import {
   type MappingKey,
 } from "@/modules/surveys/survey-snapshot";
 
-function mappedValues(
+export function mappedValues(
   snapshot: SurveySnapshot,
   answers: SurveyAnswers,
   mapping: MappingKey,
@@ -31,9 +31,13 @@ function mappedValues(
     });
 }
 
-export function projectResource(snapshotInput: unknown, answersInput: unknown) {
+export function projectResource(
+  snapshotInput: unknown,
+  answersInput: unknown,
+  imagePresent = false,
+) {
   const snapshot = surveySnapshotSchema.parse(snapshotInput);
-  const answers = validateSurveyAnswers(snapshot, answersInput);
+  const answers = validateSurveyAnswers(snapshot, answersInput, imagePresent);
   const first = (mapping: MappingKey) =>
     mappedValues(snapshot, answers, mapping)[0] ?? null;
   const required = (mapping: MappingKey) => {
