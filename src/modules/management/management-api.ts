@@ -37,6 +37,7 @@ export function managementApi(
 export async function readManagementBody(
   request: Request,
   multipart = false,
+  maxJsonBytes = 300 * 1024,
 ): Promise<unknown> {
   const origin = request.headers.get("origin");
   const canonical = process.env.NEXTAUTH_URL
@@ -66,7 +67,7 @@ export async function readManagementBody(
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > (multipart ? 3 * 1024 * 1024 : 300 * 1024)) {
+      if (size > (multipart ? 3 * 1024 * 1024 : maxJsonBytes)) {
         await reader.cancel();
         throw new ManagementError(413, "The request is too large.");
       }

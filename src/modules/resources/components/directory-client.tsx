@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { trackCategorySelection } from "@/modules/analytics/public-tracking";
 import {
   directoryFiltersSchema,
   directoryResultSchema,
@@ -287,7 +288,15 @@ export function DirectoryClient({
               id="directory-category"
               name="category"
               defaultValue={filters.category}
-              onChange={(event) => event.currentTarget.form?.requestSubmit()}
+              onChange={(event) => {
+                const category = options.categories.find(
+                  (category) => category.slug === event.currentTarget.value,
+                );
+                const changed =
+                  category && category.slug !== currentFilters.current.category;
+                event.currentTarget.form?.requestSubmit();
+                if (changed) trackCategorySelection(category);
+              }}
               className={controlClass}
             >
               <option value="">All Categories</option>
