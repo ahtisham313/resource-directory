@@ -1,69 +1,128 @@
-import Image from "next/image";
+﻿import { Suspense } from "react";
+import Link from "next/link";
+import { connection } from "next/server";
+import { HeartPulse, ArrowUpRight } from "lucide-react";
+import {
+  getDirectoryOptions,
+  queryDirectory,
+} from "@/modules/resources/directory-query";
+import { DirectoryClient } from "@/modules/resources/components/directory-client";
+import { directoryUrl } from "@/modules/resources/directory-types";
 
-export default function Home() {
+export const metadata = {
+  title: "Healthcare Resource Directory",
+  description:
+    "Find healthcare practices, providers, and services. Search by name, category, or address and explore care near you.",
+};
+
+async function Directory({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  await connection();
+  const params = await searchParams;
+  const [initial, options] = await Promise.all([
+    queryDirectory(params),
+    getDirectoryOptions(),
+  ]);
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <>
+      {options.surveyPath && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-teal-100 bg-teal-50/60 px-4 py-3 text-sm text-teal-900">
+          <p>Help people find your practice.</p>
+          <Link
+            href={options.surveyPath}
+            prefetch={false}
+            className="inline-flex min-h-11 items-center gap-1 rounded font-medium underline underline-offset-4 focus-visible:outline-2"
+          >
+            Submit provider information
+            <ArrowUpRight className="size-4" aria-hidden="true" />
+          </Link>
+        </div>
+      )}
+      <DirectoryClient
+        key={directoryUrl(initial.filters)}
+        initial={initial}
+        options={options}
+      />
+    </>
+  );
+}
+
+export default function Home(props: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return (
+    <div className="min-h-dvh flex-1 bg-slate-50/70 text-slate-900">
+      <a
+        href="#directory-main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-lg focus:bg-white focus:p-3 focus:ring-2"
+      >
+        Skip to directory
+      </a>
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-7 lg:px-8">
+          <Link
+            href="/"
+            prefetch={false}
+            className="flex min-w-0 items-center gap-3 rounded focus-visible:outline-2"
+          >
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal-800 text-white">
+              <HeartPulse className="size-6" aria-hidden="true" />
+            </span>
+            <span className="text-sm font-semibold tracking-tight sm:text-base">
+              Resource Directory
+              <span className="mt-0.5 block text-xs font-normal tracking-normal text-slate-500">
+                Healthcare & community services
+              </span>
+            </span>
+          </Link>
+          <nav aria-label="Public navigation">
+            <Link
+              href="/admin/login"
+              prefetch={false}
+              className="inline-flex min-h-11 items-center rounded-lg px-2 text-sm text-slate-500 hover:text-teal-800 focus-visible:outline-2"
+            >
+              Admin sign in
+            </Link>
+          </nav>
+        </div>
+      </header>
+      <main
+        id="directory-main"
+        className="mx-auto max-w-7xl px-4 pt-10 pb-12 sm:px-7 sm:pt-14 lg:px-8"
+      >
+        <div className="mb-8 max-w-2xl">
+          <p className="mb-3 text-xs font-semibold tracking-widest text-teal-800 uppercase">
+            Your care, your community
+          </p>
+          <h1 className="text-3xl leading-tight font-semibold tracking-tight sm:text-4xl">
+            Find the care you’re looking for.
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-4 text-base leading-7 text-slate-500">
+            Explore healthcare practices, providers, and services. Find the
+            information you need to take your next step.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        <Suspense
+          fallback={
+            <div
+              role="status"
+              className="rounded-2xl border bg-white p-8 text-sm text-slate-500"
+            >
+              Loading the healthcare directory…
+            </div>
+          }
+        >
+          <Directory {...props} />
+        </Suspense>
       </main>
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-7 text-xs leading-6 text-slate-500 sm:px-7 lg:px-8">
+          Resource Directory · Healthcare & community services
+        </div>
+      </footer>
     </div>
   );
 }
